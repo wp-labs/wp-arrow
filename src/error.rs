@@ -25,6 +25,10 @@ pub enum WpArrowError {
     TimestampOverflow { field_name: String },
     /// Failed to parse a string value back into the expected type.
     ParseError { field_name: String, detail: String },
+    /// IPC encoding failed (wraps Arrow IPC writer errors).
+    IpcEncodeError(String),
+    /// IPC decoding failed (malformed frame, incomplete data, etc.).
+    IpcDecodeError(String),
 }
 
 impl fmt::Display for WpArrowError {
@@ -69,6 +73,12 @@ impl fmt::Display for WpArrowError {
             }
             WpArrowError::ParseError { field_name, detail } => {
                 write!(f, "parse error for field '{field_name}': {detail}")
+            }
+            WpArrowError::IpcEncodeError(msg) => {
+                write!(f, "IPC encode error: {msg}")
+            }
+            WpArrowError::IpcDecodeError(msg) => {
+                write!(f, "IPC decode error: {msg}")
             }
         }
     }
