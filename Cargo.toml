@@ -1,0 +1,12 @@
+[package]
+name = "wp-arrow"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+name = "wp_arrow"
+
+[dependencies]
+arrow = { version = "54", default-features = false, features = ["ipc"] }
+wp-model-core = { path = "../wp-model-core" }
+chrono = "0.4"
