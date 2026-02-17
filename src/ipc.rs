@@ -80,9 +80,8 @@ pub fn decode_ipc(data: &[u8]) -> Result<IpcFrame, WpArrowError> {
         )));
     }
 
-    let tag = String::from_utf8(data[21..tag_end].to_vec()).map_err(|e| {
-        WpArrowError::IpcDecodeError(format!("invalid UTF-8 in tag: {e}"))
-    })?;
+    let tag = String::from_utf8(data[21..tag_end].to_vec())
+        .map_err(|e| WpArrowError::IpcDecodeError(format!("invalid UTF-8 in tag: {e}")))?;
 
     let ipc_payload = &data[tag_end..];
     let mut reader = StreamReader::try_new(ipc_payload, None)
@@ -90,9 +89,7 @@ pub fn decode_ipc(data: &[u8]) -> Result<IpcFrame, WpArrowError> {
 
     let batch = reader
         .next()
-        .ok_or_else(|| {
-            WpArrowError::IpcDecodeError("no RecordBatch in IPC payload".to_string())
-        })?
+        .ok_or_else(|| WpArrowError::IpcDecodeError("no RecordBatch in IPC payload".to_string()))?
         .map_err(|e| WpArrowError::IpcDecodeError(e.to_string()))?;
 
     Ok(IpcFrame {

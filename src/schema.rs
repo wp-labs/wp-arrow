@@ -165,7 +165,11 @@ mod tests {
         let arrow = to_arrow_type(&wp);
         assert_eq!(
             arrow,
-            ArrowDataType::List(Arc::new(ArrowField::new("item", ArrowDataType::Int64, true)))
+            ArrowDataType::List(Arc::new(ArrowField::new(
+                "item",
+                ArrowDataType::Int64,
+                true
+            )))
         );
     }
 
@@ -182,8 +186,11 @@ mod tests {
     #[test]
     fn arrow_type_nested_array() {
         let wp = WpDataType::Array(Box::new(WpDataType::Array(Box::new(WpDataType::Float))));
-        let inner_list =
-            ArrowDataType::List(Arc::new(ArrowField::new("item", ArrowDataType::Float64, true)));
+        let inner_list = ArrowDataType::List(Arc::new(ArrowField::new(
+            "item",
+            ArrowDataType::Float64,
+            true,
+        )));
         let expected = ArrowDataType::List(Arc::new(ArrowField::new("item", inner_list, true)));
         assert_eq!(to_arrow_type(&wp), expected);
     }
@@ -246,7 +253,10 @@ mod tests {
         ];
         let schema = to_arrow_schema(&fields).unwrap();
         assert_eq!(schema.fields().len(), 2);
-        assert!(matches!(schema.field(1).data_type(), ArrowDataType::List(_)));
+        assert!(matches!(
+            schema.field(1).data_type(),
+            ArrowDataType::List(_)
+        ));
     }
 
     #[test]
@@ -359,7 +369,10 @@ mod tests {
     #[test]
     fn parse_unsupported_type() {
         let err = parse_wp_type("unknown").unwrap_err();
-        assert_eq!(err, WpArrowError::UnsupportedDataType("unknown".to_string()));
+        assert_eq!(
+            err,
+            WpArrowError::UnsupportedDataType("unknown".to_string())
+        );
     }
 
     #[test]

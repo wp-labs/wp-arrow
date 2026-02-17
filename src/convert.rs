@@ -2,12 +2,11 @@ use std::net::IpAddr;
 use std::sync::Arc;
 
 use arrow::array::{
-    ArrayRef, BooleanBuilder, Float64Builder, Int64Builder, ListBuilder, RecordBatch,
-    StringBuilder, TimestampNanosecondBuilder,
+    Array, BooleanArray, Float64Array, Int64Array, ListArray, StringArray, TimestampNanosecondArray,
 };
 use arrow::array::{
-    Array, BooleanArray, Float64Array, Int64Array, ListArray, StringArray,
-    TimestampNanosecondArray,
+    ArrayRef, BooleanBuilder, Float64Builder, Int64Builder, ListBuilder, RecordBatch,
+    StringBuilder, TimestampNanosecondBuilder,
 };
 use chrono::DateTime;
 
@@ -80,9 +79,7 @@ pub fn batch_to_records(
 
 fn build_column(fd: &FieldDef, records: &[DataRecord]) -> Result<ArrayRef, WpArrowError> {
     match &fd.data_type {
-        WpDataType::Chars | WpDataType::Ip | WpDataType::Hex => {
-            build_string_column(fd, records)
-        }
+        WpDataType::Chars | WpDataType::Ip | WpDataType::Hex => build_string_column(fd, records),
         WpDataType::Digit => build_digit_column(fd, records),
         WpDataType::Float => build_float_column(fd, records),
         WpDataType::Bool => build_bool_column(fd, records),
@@ -175,12 +172,11 @@ fn build_time_column(fd: &FieldDef, records: &[DataRecord]) -> Result<ArrayRef, 
                 handle_null(&mut builder, fd, |b| b.append_null())?;
             }
             Some(Value::Time(ndt)) => {
-                let nanos = ndt
-                    .and_utc()
-                    .timestamp_nanos_opt()
-                    .ok_or_else(|| WpArrowError::TimestampOverflow {
+                let nanos = ndt.and_utc().timestamp_nanos_opt().ok_or_else(|| {
+                    WpArrowError::TimestampOverflow {
                         field_name: fd.name.clone(),
-                    })?;
+                    }
+                })?;
                 builder.append_value(nanos);
             }
             Some(other) => {
@@ -601,8 +597,8 @@ fn wp_type_to_model_meta(wp_type: &WpDataType) -> DataType {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use arrow::array::AsArray;
     use crate::schema::{FieldDef, WpDataType};
+    use arrow::array::AsArray;
     use chrono::NaiveDateTime;
     use std::net::{IpAddr, Ipv4Addr};
     use wp_model_core::model::{DataField, DataRecord, Field, Value};
@@ -647,11 +643,15 @@ mod tests {
         assert_eq!(names.value(0), "Alice");
         assert_eq!(names.value(1), "Bob");
 
-        let counts = batch.column(1).as_primitive::<arrow::datatypes::Int64Type>();
+        let counts = batch
+            .column(1)
+            .as_primitive::<arrow::datatypes::Int64Type>();
         assert_eq!(counts.value(0), 10);
         assert_eq!(counts.value(1), 20);
 
-        let ratios = batch.column(2).as_primitive::<arrow::datatypes::Float64Type>();
+        let ratios = batch
+            .column(2)
+            .as_primitive::<arrow::datatypes::Float64Type>();
         assert!((ratios.value(0) - 1.5).abs() < f64::EPSILON);
 
         let actives = batch.column(3).as_boolean();
@@ -662,7 +662,8 @@ mod tests {
     #[test]
     fn r2b_time_field() {
         let fds = vec![FieldDef::new("ts", WpDataType::Time)];
-        let ndt = NaiveDateTime::parse_from_str("2024-06-15 12:30:00", "%Y-%m-%d %H:%M:%S").unwrap();
+        let ndt =
+            NaiveDateTime::parse_from_str("2024-06-15 12:30:00", "%Y-%m-%d %H:%M:%S").unwrap();
         let records = vec![make_record(vec![Field::from_time("ts", ndt)])];
 
         let batch = records_to_batch(&records, &fds).unwrap();
@@ -758,7 +759,9 @@ mod tests {
 
         let batch = records_to_batch(&records, &fds).unwrap();
         assert_eq!(batch.num_columns(), 1);
-        let arr = batch.column(0).as_primitive::<arrow::datatypes::Int64Type>();
+        let arr = batch
+            .column(0)
+            .as_primitive::<arrow::datatypes::Int64Type>();
         assert_eq!(arr.value(0), 1);
     }
 
@@ -768,7 +771,8 @@ mod tests {
             "tags",
             WpDataType::Array(Box::new(WpDataType::Digit)),
         )];
-        let items: Vec<DataField> = vec![Field::from_digit("item", 10), Field::from_digit("item", 20)];
+        let items: Vec<DataField> =
+            vec![Field::from_digit("item", 10), Field::from_digit("item", 20)];
         let records = vec![make_record(vec![Field::from_arr("tags", items)])];
 
         let batch = records_to_batch(&records, &fds).unwrap();
@@ -779,10 +783,7 @@ mod tests {
             .unwrap();
         assert_eq!(arr.len(), 1);
         let inner = arr.value(0);
-        let inner_vals = inner
-            .as_any()
-            .downcast_ref::<Int64Array>()
-            .unwrap();
+        let inner_vals = inner.as_any().downcast_ref::<Int64Array>().unwrap();
         assert_eq!(inner_vals.value(0), 10);
         assert_eq!(inner_vals.value(1), 20);
     }
@@ -814,7 +815,9 @@ mod tests {
         let batch = records_to_batch(&records, &fds).unwrap();
         assert_eq!(batch.num_rows(), 10000);
 
-        let ids = batch.column(0).as_primitive::<arrow::datatypes::Int64Type>();
+        let ids = batch
+            .column(0)
+            .as_primitive::<arrow::datatypes::Int64Type>();
         assert_eq!(ids.value(0), 0);
         assert_eq!(ids.value(9999), 9999);
     }
@@ -843,7 +846,10 @@ mod tests {
 
         assert_eq!(records_out.len(), 1);
         let rec = &records_out[0];
-        assert_eq!(rec.get_value("name"), Some(&Value::Chars(FValueStr::from("Alice"))));
+        assert_eq!(
+            rec.get_value("name"),
+            Some(&Value::Chars(FValueStr::from("Alice")))
+        );
         assert_eq!(rec.get_value("count"), Some(&Value::Digit(42)));
         assert_eq!(rec.get_value("ratio"), Some(&Value::Float(1.23)));
         assert_eq!(rec.get_value("active"), Some(&Value::Bool(true)));
@@ -852,7 +858,8 @@ mod tests {
     #[test]
     fn b2r_timestamp() {
         let fds = vec![FieldDef::new("ts", WpDataType::Time)];
-        let ndt = NaiveDateTime::parse_from_str("2024-06-15 12:30:00", "%Y-%m-%d %H:%M:%S").unwrap();
+        let ndt =
+            NaiveDateTime::parse_from_str("2024-06-15 12:30:00", "%Y-%m-%d %H:%M:%S").unwrap();
         let records_in = vec![make_record(vec![Field::from_time("ts", ndt)])];
         let batch = records_to_batch(&records_in, &fds).unwrap();
         let records_out = batch_to_records(&batch, &fds).unwrap();
@@ -867,7 +874,11 @@ mod tests {
         let net = IpNetValue::new(IpAddr::V4(Ipv4Addr::new(10, 0, 0, 0)), 8).unwrap();
         let records_in = vec![
             make_record(vec![Field::from_ip("addr", ip)]),
-            make_record(vec![Field::new(DataType::IP, "addr", Value::IpNet(net.clone()))]),
+            make_record(vec![Field::new(
+                DataType::IP,
+                "addr",
+                Value::IpNet(net.clone()),
+            )]),
         ];
         let batch = records_to_batch(&records_in, &fds).unwrap();
         let records_out = batch_to_records(&batch, &fds).unwrap();
@@ -933,7 +944,8 @@ mod tests {
     fn roundtrip_all_types() {
         let ip = IpAddr::V4(Ipv4Addr::new(10, 0, 0, 1));
         let net = IpNetValue::new(IpAddr::V4(Ipv4Addr::new(172, 16, 0, 0)), 12).unwrap();
-        let ndt = NaiveDateTime::parse_from_str("2025-01-01 00:00:00", "%Y-%m-%d %H:%M:%S").unwrap();
+        let ndt =
+            NaiveDateTime::parse_from_str("2025-01-01 00:00:00", "%Y-%m-%d %H:%M:%S").unwrap();
 
         let fds = vec![
             FieldDef::new("chars", WpDataType::Chars),
@@ -946,8 +958,10 @@ mod tests {
             FieldDef::new("nums", WpDataType::Array(Box::new(WpDataType::Digit))),
         ];
 
-        let arr_items: Vec<DataField> =
-            vec![Field::from_digit("item", 100), Field::from_digit("item", 200)];
+        let arr_items: Vec<DataField> = vec![
+            Field::from_digit("item", 100),
+            Field::from_digit("item", 200),
+        ];
 
         let records_in = vec![
             make_record(vec![
@@ -983,7 +997,10 @@ mod tests {
             Some(&Value::Chars(FValueStr::from("hello")))
         );
         assert_eq!(records_out[0].get_value("digit"), Some(&Value::Digit(42)));
-        assert_eq!(records_out[0].get_value("float"), Some(&Value::Float(9.876)));
+        assert_eq!(
+            records_out[0].get_value("float"),
+            Some(&Value::Float(9.876))
+        );
         assert_eq!(records_out[0].get_value("bool"), Some(&Value::Bool(true)));
         assert_eq!(records_out[0].get_value("time"), Some(&Value::Time(ndt)));
         assert_eq!(records_out[0].get_value("ip"), Some(&Value::IpAddr(ip)));
@@ -1002,14 +1019,8 @@ mod tests {
         }
 
         // Row 1
-        assert_eq!(
-            records_out[1].get_value("ip"),
-            Some(&Value::IpNet(net))
-        );
-        assert_eq!(
-            records_out[1].get_value("hex"),
-            Some(&Value::Hex(HexT(0)))
-        );
+        assert_eq!(records_out[1].get_value("ip"), Some(&Value::IpNet(net)));
+        assert_eq!(records_out[1].get_value("hex"), Some(&Value::Hex(HexT(0))));
     }
 
     #[test]
