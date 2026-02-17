@@ -1,3 +1,7 @@
+![CI](https://github.com/wp-labs/wp-arrow/workflows/CI/badge.svg)
+[![codecov](https://codecov.io/gh/wp-labs/wp-arrow/graph/badge.svg?token=6SVCXBHB6B)](https://codecov.io/gh/wp-labs/wp-arrow)
+![License](https://img.shields.io/badge/License-Apache%202.0-green.svg)
+
 # wp-arrow
 
 Apache Arrow utilities for wp-model, providing schema mapping, data conversion, and IPC support.
