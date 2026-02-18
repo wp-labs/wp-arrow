@@ -1,6 +1,6 @@
 [package]
 name = "wp-arrow"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
 description = "Apache Arrow utilities for wp-model, providing schema mapping, data conversion, and IPC support"
 license = "Apache-2.0"
