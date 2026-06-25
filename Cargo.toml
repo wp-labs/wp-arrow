@@ -1,6 +1,6 @@
 [package]
 name = "wp-arrow"
-version = "0.1.1"
+version = "0.2.0"
 edition = "2024"
 description = "Apache Arrow utilities for wp-model, providing schema mapping, data conversion, and IPC support"
 license = "Apache-2.0"
@@ -14,6 +14,6 @@ categories = ["data-structures", "encoding"]
 name = "wp_arrow"
 
 [dependencies]
-arrow = { version = "54", default-features = false, features = ["ipc"] }
+arrow = { version = "59", default-features = false, features = ["ipc"] }
 wp-model-core =  "0.8"
 chrono = "0.4"
