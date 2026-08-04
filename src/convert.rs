@@ -1,21 +1,25 @@
 use std::net::IpAddr;
+use std::str::FromStr;
 use std::sync::Arc;
 
 use arrow::array::{
-    Array, BooleanArray, Float64Array, Int64Array, ListArray, StringArray, TimestampNanosecondArray,
+    Array, BooleanArray, Decimal256Array, Float64Array, Int64Array, ListArray, StringArray,
+    TimestampNanosecondArray,
 };
 use arrow::array::{
-    ArrayRef, BooleanBuilder, Float64Builder, Int64Builder, ListBuilder, RecordBatch,
-    StringBuilder, TimestampNanosecondBuilder,
+    ArrayRef, BooleanBuilder, Decimal256Builder, Float64Builder, Int64Builder, ListBuilder,
+    RecordBatch, StringBuilder, TimestampNanosecondBuilder,
 };
+use arrow::datatypes::i256;
 use chrono::DateTime;
+use num_bigint::BigUint;
 
 use wp_model_core::model::{
     DataRecord, DataType, FValueStr, Field, FieldStorage, HexT, IpNetValue, Value,
 };
 
 use crate::error::WpArrowError;
-use crate::schema::{FieldDef, WpDataType, to_arrow_schema};
+use crate::schema::{BIGINT_DECIMAL_PRECISION, FieldDef, WpDataType, to_arrow_schema};
 
 /// Convert row-oriented DataRecords to a columnar Arrow RecordBatch.
 ///
@@ -81,6 +85,8 @@ fn build_column(fd: &FieldDef, records: &[DataRecord]) -> Result<ArrayRef, WpArr
     match &fd.data_type {
         WpDataType::Chars | WpDataType::Ip | WpDataType::Hex => build_string_column(fd, records),
         WpDataType::Digit => build_digit_column(fd, records),
+        // 任意精度整数：Decimal256(39, 0) 列，无损编码 2^129-1
+        WpDataType::BigInt => build_bigint_column(fd, records),
         WpDataType::Float => build_float_column(fd, records),
         WpDataType::Bool => build_bool_column(fd, records),
         WpDataType::Time => build_time_column(fd, records),
@@ -98,6 +104,38 @@ fn build_string_column(fd: &FieldDef, records: &[DataRecord]) -> Result<ArrayRef
             Some(val) => {
                 let s = value_to_string(val, &fd.data_type, &fd.name)?;
                 builder.append_value(&s);
+            }
+        }
+    }
+    Ok(Arc::new(builder.finish()))
+}
+
+/// BigInt 列：Decimal256(39, 0)。BigUint 以十进制字符串转入 i256（无损）。
+fn build_bigint_column(fd: &FieldDef, records: &[DataRecord]) -> Result<ArrayRef, WpArrowError> {
+    let mut builder = Decimal256Builder::with_capacity(records.len()).with_data_type(
+        arrow::datatypes::DataType::Decimal256(BIGINT_DECIMAL_PRECISION, 0),
+    );
+    for rec in records {
+        match rec.get_value(&fd.name) {
+            Some(Value::Null) | None => {
+                handle_null(&mut builder, fd, |b| b.append_null())?;
+            }
+            Some(Value::BigUint(v)) => {
+                let dec = i256::from_str(&v.to_string()).map_err(|err| {
+                    WpArrowError::ValueConversionError {
+                        field_name: fd.name.clone(),
+                        expected: "BigInt(decimal)".to_string(),
+                        actual: format!("{} (i256 parse: {err})", v),
+                    }
+                })?;
+                builder.append_value(dec);
+            }
+            Some(other) => {
+                return Err(WpArrowError::ValueConversionError {
+                    field_name: fd.name.clone(),
+                    expected: "BigUint".to_string(),
+                    actual: other.tag().to_string(),
+                });
             }
         }
     }
@@ -201,6 +239,7 @@ fn build_list_column(
             build_list_string(fd, records, inner_type)
         }
         WpDataType::Digit => build_list_digit(fd, records),
+        WpDataType::BigInt => build_list_bigint(fd, records),
         WpDataType::Float => build_list_float(fd, records),
         WpDataType::Bool => build_list_bool(fd, records),
         WpDataType::Time => build_list_time(fd, records),
@@ -229,6 +268,53 @@ fn build_list_string(
                     } else {
                         let s = value_to_string(val, inner_type, &fd.name)?;
                         builder.values().append_value(&s);
+                    }
+                }
+                builder.append(true);
+            }
+            Some(other) => {
+                return Err(WpArrowError::ValueConversionError {
+                    field_name: fd.name.clone(),
+                    expected: "Array".to_string(),
+                    actual: other.tag().to_string(),
+                });
+            }
+        }
+    }
+    Ok(Arc::new(builder.finish()))
+}
+
+/// array<bigint>：List<Decimal256(39, 0)>，元素 BigUint 以十进制字符串转入 i256。
+fn build_list_bigint(fd: &FieldDef, records: &[DataRecord]) -> Result<ArrayRef, WpArrowError> {
+    let mut builder = ListBuilder::new(Decimal256Builder::with_capacity(0).with_data_type(
+        arrow::datatypes::DataType::Decimal256(BIGINT_DECIMAL_PRECISION, 0),
+    ));
+    for rec in records {
+        match rec.get_value(&fd.name) {
+            Some(Value::Null) | None => {
+                handle_null(&mut builder, fd, |b| b.append_null())?;
+            }
+            Some(Value::Array(items)) => {
+                for item in items {
+                    match item.get_value() {
+                        Value::BigUint(v) => {
+                            let dec = i256::from_str(&v.to_string()).map_err(|err| {
+                                WpArrowError::ValueConversionError {
+                                    field_name: fd.name.clone(),
+                                    expected: "BigInt(decimal)".to_string(),
+                                    actual: format!("{} (i256 parse: {err})", v),
+                                }
+                            })?;
+                            builder.values().append_value(dec);
+                        }
+                        Value::Null => builder.values().append_null(),
+                        other => {
+                            return Err(WpArrowError::ValueConversionError {
+                                field_name: fd.name.clone(),
+                                expected: "BigUint".to_string(),
+                                actual: other.tag().to_string(),
+                            });
+                        }
                     }
                 }
                 builder.append(true);
@@ -459,6 +545,24 @@ fn extract_value(
                 .ok_or_else(|| WpArrowError::ArrowBuildError("expected Int64Array".to_string()))?;
             Ok(Value::Digit(arr.value(row_idx)))
         }
+        WpDataType::BigInt => {
+            let arr = col
+                .as_any()
+                .downcast_ref::<Decimal256Array>()
+                .ok_or_else(|| {
+                    WpArrowError::ArrowBuildError("expected Decimal256Array".to_string())
+                })?;
+            let v = arr.value(row_idx);
+            // i256 十进制输出解析回任意精度整数；解析失败视为格式错误
+            match BigUint::from_str(&v.to_string()) {
+                Ok(v) => Ok(Value::BigUint(v)),
+                Err(err) => Err(WpArrowError::ValueConversionError {
+                    field_name: field_name.to_string(),
+                    expected: "BigInt(decimal)".to_string(),
+                    actual: format!("{v} (parse: {err})"),
+                }),
+            }
+        }
         WpDataType::Float => {
             let arr = col.as_any().downcast_ref::<Float64Array>().ok_or_else(|| {
                 WpArrowError::ArrowBuildError("expected Float64Array".to_string())
@@ -573,6 +677,7 @@ fn wp_type_to_model_meta(wp_type: &WpDataType) -> DataType {
     match wp_type {
         WpDataType::Chars => DataType::Chars,
         WpDataType::Digit => DataType::Digit,
+        WpDataType::BigInt => DataType::BigInt,
         WpDataType::Float => DataType::Float,
         WpDataType::Bool => DataType::Bool,
         WpDataType::Time => DataType::Time,
@@ -582,6 +687,7 @@ fn wp_type_to_model_meta(wp_type: &WpDataType) -> DataType {
             let inner_name = match inner.as_ref() {
                 WpDataType::Chars => "chars",
                 WpDataType::Digit => "digit",
+                WpDataType::BigInt => "bigint",
                 WpDataType::Float => "float",
                 WpDataType::Bool => "bool",
                 WpDataType::Time => "time",
@@ -1051,5 +1157,76 @@ mod tests {
         );
         // null field should be absent from the record (we skip nulls in batch_to_records)
         assert_eq!(records_out[1].get_value("opt_digit"), None);
+    }
+
+    #[test]
+    fn roundtrip_bigint_ipv6_key() {
+        // 任意精度整数（IPv6 统一数值键）经 Arrow 十进制字符串传输，无损 roundtrip
+        let fds = vec![FieldDef::new("ip_num", WpDataType::BigInt)];
+
+        let v4 = BigUint::from_str("134744072").unwrap();
+        let v6 = BigUint::from_str("382824323044708348099391746388336347272").unwrap();
+
+        let records_in = vec![
+            make_record(vec![Field::new(
+                DataType::BigInt,
+                "ip_num",
+                Value::BigUint(v4.clone()),
+            )]),
+            make_record(vec![Field::new(
+                DataType::BigInt,
+                "ip_num",
+                Value::BigUint(v6.clone()),
+            )]),
+        ];
+
+        let batch = records_to_batch(&records_in, &fds).unwrap();
+        let records_out = batch_to_records(&batch, &fds).unwrap();
+
+        assert_eq!(records_out.len(), 2);
+        assert_eq!(
+            records_out[0].get_value("ip_num"),
+            Some(&Value::BigUint(v4))
+        );
+        assert_eq!(
+            records_out[1].get_value("ip_num"),
+            Some(&Value::BigUint(v6))
+        );
+        // meta 类型保留为 BigInt
+        assert_eq!(
+            records_out[1].field("ip_num").map(|f| f.get_meta()),
+            Some(&DataType::BigInt)
+        );
+    }
+
+    #[test]
+    fn roundtrip_bigint_list() {
+        // array<bigint> 元素同样以十进制字符串传输
+        let fds = vec![FieldDef::new(
+            "nums",
+            WpDataType::Array(Box::new(WpDataType::BigInt)),
+        )];
+
+        let a = BigUint::from(1u32);
+        let b = BigUint::from_str("340282366920938463463374607431768211456").unwrap();
+
+        let records_in = vec![make_record(vec![Field::from_arr(
+            "nums",
+            vec![
+                Field::new(DataType::BigInt, "item", Value::BigUint(a.clone())),
+                Field::new(DataType::BigInt, "item", Value::BigUint(b.clone())),
+            ],
+        )])];
+
+        let batch = records_to_batch(&records_in, &fds).unwrap();
+        let records_out = batch_to_records(&batch, &fds).unwrap();
+
+        if let Some(Value::Array(items)) = records_out[0].get_value("nums") {
+            assert_eq!(items.len(), 2);
+            assert_eq!(items[0].get_value(), &Value::BigUint(a));
+            assert_eq!(items[1].get_value(), &Value::BigUint(b));
+        } else {
+            panic!("expected array value");
+        }
     }
 }

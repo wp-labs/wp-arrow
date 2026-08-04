@@ -9,6 +9,8 @@ use crate::error::WpArrowError;
 pub enum WpDataType {
     Chars,
     Digit,
+    /// 任意精度无符号整数（IPv4/IPv6 统一数值键等），以 Decimal256 在 Arrow 中传输
+    BigInt,
     Float,
     Bool,
     Time,
@@ -16,6 +18,10 @@ pub enum WpDataType {
     Hex,
     Array(Box<WpDataType>),
 }
+
+/// BigInt 的 Decimal256 精度：2^129-1（IPv6 统一键上限）为 39 位十进制。
+/// 若未来编码位数超过 39，需同步增大此值。
+pub const BIGINT_DECIMAL_PRECISION: u8 = 39;
 
 /// A named, typed field definition for building Arrow schemas.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -45,6 +51,8 @@ pub fn to_arrow_type(wp_type: &WpDataType) -> ArrowDataType {
     match wp_type {
         WpDataType::Chars => ArrowDataType::Utf8,
         WpDataType::Digit => ArrowDataType::Int64,
+        // 任意精度整数：Decimal256(39, 0) 保留数值语义，可无损表示 2^129-1
+        WpDataType::BigInt => ArrowDataType::Decimal256(BIGINT_DECIMAL_PRECISION, 0),
         WpDataType::Float => ArrowDataType::Float64,
         WpDataType::Bool => ArrowDataType::Boolean,
         WpDataType::Time => ArrowDataType::Timestamp(TimeUnit::Nanosecond, None),
@@ -91,6 +99,7 @@ pub fn parse_wp_type(s: &str) -> Result<WpDataType, WpArrowError> {
     match lower.as_str() {
         "chars" => Ok(WpDataType::Chars),
         "digit" => Ok(WpDataType::Digit),
+        "bigint" => Ok(WpDataType::BigInt),
         "float" => Ok(WpDataType::Float),
         "bool" => Ok(WpDataType::Bool),
         "time" => Ok(WpDataType::Time),
@@ -125,6 +134,15 @@ mod tests {
     #[test]
     fn arrow_type_digit() {
         assert_eq!(to_arrow_type(&WpDataType::Digit), ArrowDataType::Int64);
+    }
+
+    #[test]
+    fn arrow_type_bigint() {
+        // 任意精度整数以 Decimal256(39, 0) 传输（可表示 2^129-1），保留数值语义
+        assert_eq!(
+            to_arrow_type(&WpDataType::BigInt),
+            ArrowDataType::Decimal256(BIGINT_DECIMAL_PRECISION, 0)
+        );
     }
 
     #[test]
@@ -286,6 +304,12 @@ mod tests {
     #[test]
     fn parse_digit() {
         assert_eq!(parse_wp_type("digit"), Ok(WpDataType::Digit));
+    }
+
+    #[test]
+    fn parse_bigint() {
+        assert_eq!(parse_wp_type("bigint"), Ok(WpDataType::BigInt));
+        assert_eq!(parse_wp_type("BIGINT"), Ok(WpDataType::BigInt));
     }
 
     #[test]
