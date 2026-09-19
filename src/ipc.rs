@@ -162,33 +162,43 @@ mod tests {
 
 #[test]
 fn decode_roundtrip_preserves_memory() {
-    use std::sync::Arc;
-    use crate::ipc::{encode_ipc, decode_ipc};
+    use crate::ipc::{decode_ipc, encode_ipc};
     use arrow::array::{Array, StringArray};
     use arrow::datatypes::{DataType, Field, Schema};
+    use std::sync::Arc;
 
     let n = 75000;
-    let vals: Vec<Option<String>> = (0..n).map(|i| Some(format!("10.0.{}.{}", i % 4, i % 250 + 1))).collect();
+    let vals: Vec<Option<String>> = (0..n)
+        .map(|i| Some(format!("10.0.{}.{}", i % 4, i % 250 + 1)))
+        .collect();
     let schema = Arc::new(Schema::new(vec![Field::new("sip", DataType::Utf8, true)]));
     let batch = RecordBatch::try_new(schema, vec![Arc::new(StringArray::from(vals))]).unwrap();
-    eprintln!("original col bytes = {}", batch.column(0).get_array_memory_size());
+    eprintln!(
+        "original col bytes = {}",
+        batch.column(0).get_array_memory_size()
+    );
 
     let enc = encode_ipc("conn_events", &batch).unwrap();
     eprintln!("ipc payload bytes = {}", enc.len());
     let frame = decode_ipc(&enc).unwrap();
-    eprintln!("decoded col bytes = {}", frame.batch.column(0).get_array_memory_size());
+    eprintln!(
+        "decoded col bytes = {}",
+        frame.batch.column(0).get_array_memory_size()
+    );
 }
 
 // 12 列批次（模拟 wfgen conn 批次）往返内存
 #[test]
 fn decode_roundtrip_12col_memory() {
-    use std::sync::Arc;
-    use crate::ipc::{encode_ipc, decode_ipc};
+    use crate::ipc::{decode_ipc, encode_ipc};
     use arrow::array::{Array, Int64Array, StringArray};
     use arrow::datatypes::{DataType, Field, Schema};
+    use std::sync::Arc;
 
     let n = 75000;
-    let str_vals: Vec<Option<String>> = (0..n).map(|i| Some(format!("10.0.{}.{}", i % 4, i % 250 + 1))).collect();
+    let str_vals: Vec<Option<String>> = (0..n)
+        .map(|i| Some(format!("10.0.{}.{}", i % 4, i % 250 + 1)))
+        .collect();
     let int_vals: Vec<i64> = (0..n).map(|i| (i % 4096) as i64).collect();
     let schema = Arc::new(Schema::new(vec![
         Field::new("sip", DataType::Utf8, true),
@@ -198,19 +208,29 @@ fn decode_roundtrip_12col_memory() {
         Field::new("bytes", DataType::Int64, true),
         Field::new("event_time", DataType::Int64, true),
     ]));
-    let batch = RecordBatch::try_new(schema, vec![
-        Arc::new(StringArray::from(str_vals.clone())) as arrow::array::ArrayRef,
-        Arc::new(StringArray::from(str_vals.clone())) as arrow::array::ArrayRef,
-        Arc::new(StringArray::from(str_vals.clone())) as arrow::array::ArrayRef,
-        Arc::new(Int64Array::from(int_vals.clone())) as arrow::array::ArrayRef,
-        Arc::new(Int64Array::from(int_vals.clone())) as arrow::array::ArrayRef,
-        Arc::new(Int64Array::from(int_vals)) as arrow::array::ArrayRef,
-    ]).unwrap();
+    let batch = RecordBatch::try_new(
+        schema,
+        vec![
+            Arc::new(StringArray::from(str_vals.clone())) as arrow::array::ArrayRef,
+            Arc::new(StringArray::from(str_vals.clone())) as arrow::array::ArrayRef,
+            Arc::new(StringArray::from(str_vals.clone())) as arrow::array::ArrayRef,
+            Arc::new(Int64Array::from(int_vals.clone())) as arrow::array::ArrayRef,
+            Arc::new(Int64Array::from(int_vals.clone())) as arrow::array::ArrayRef,
+            Arc::new(Int64Array::from(int_vals)) as arrow::array::ArrayRef,
+        ],
+    )
+    .unwrap();
     eprintln!("orig batch bytes = {}", batch.get_array_memory_size());
     eprintln!("orig sip col = {}", batch.column(0).get_array_memory_size());
     let enc = encode_ipc("conn_events", &batch).unwrap();
     eprintln!("ipc payload = {}", enc.len());
     let frame = decode_ipc(&enc).unwrap();
-    eprintln!("decoded batch bytes = {}", frame.batch.get_array_memory_size());
-    eprintln!("decoded sip col = {}", frame.batch.column(0).get_array_memory_size());
+    eprintln!(
+        "decoded batch bytes = {}",
+        frame.batch.get_array_memory_size()
+    );
+    eprintln!(
+        "decoded sip col = {}",
+        frame.batch.column(0).get_array_memory_size()
+    );
 }

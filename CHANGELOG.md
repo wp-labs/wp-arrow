@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-09-19
+
+### ⚠️ BREAKING CHANGES
+
+- 依赖 `arrow` 59 → 60（arrow 类型出现在公开 API，大版本升级即破坏性变更）
+- 依赖 `wp-model-core` 0.9 → 0.10（整型正名：`Value::Digit` → `Value::Int`、`DataType::Digit` → `DataType::Int`）
+
+### Changed
+
+- 跟进 wp-model-core 0.10 正名：`Value::Int` / `DataType::Int` / `Field::from_int`（编解码两侧与测试）
+- `wp_type_to_model_meta`：`WpDataType::Digit` → `DataType::Int`；`DataType::Array` 改用 `ArraySubtype`
+- README 徽章补齐为 6 枚并移至标题下方
+- LICENSE 补齐 Apache-2.0 版权行
+- 版本 0.3.1 → 0.4.0
+
+### Dependencies
+
+- `arrow`：`59` → `60`
+- `wp-model-core`：`0.9` → `0.10`（`num-bigint` 保持 `0.4`，与上游 `BigUint` 对齐）
+
+### Tests
+
+- 既有 69 项测试在 arrow 60 / wp-model-core 0.10 下全部通过
+
 ## [0.3.0] - 2026-08-04
 
 ### ⚠️ BREAKING CHANGES
@@ -41,5 +65,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - 版本 0.2.0 → 0.3.0
 
-[Unreleased]: https://github.com/wp-labs/wp-arrow/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/wp-labs/wp-arrow/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/wp-labs/wp-arrow/compare/v0.3.1...v0.4.0
 [0.3.0]: https://github.com/wp-labs/wp-arrow/compare/v0.2.0...v0.3.0

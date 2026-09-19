@@ -149,7 +149,7 @@ fn build_digit_column(fd: &FieldDef, records: &[DataRecord]) -> Result<ArrayRef,
             Some(Value::Null) | None => {
                 handle_null(&mut builder, fd, |b| b.append_null())?;
             }
-            Some(Value::Digit(v)) => builder.append_value(*v),
+            Some(Value::Int(v)) => builder.append_value(*v),
             Some(other) => {
                 return Err(WpArrowError::ValueConversionError {
                     field_name: fd.name.clone(),
@@ -341,7 +341,7 @@ fn build_list_digit(fd: &FieldDef, records: &[DataRecord]) -> Result<ArrayRef, W
             Some(Value::Array(items)) => {
                 for item in items {
                     match item.get_value() {
-                        Value::Digit(v) => builder.values().append_value(*v),
+                        Value::Int(v) => builder.values().append_value(*v),
                         Value::Null => builder.values().append_null(),
                         other => {
                             return Err(WpArrowError::ValueConversionError {
@@ -543,7 +543,7 @@ fn extract_value(
                 .as_any()
                 .downcast_ref::<Int64Array>()
                 .ok_or_else(|| WpArrowError::ArrowBuildError("expected Int64Array".to_string()))?;
-            Ok(Value::Digit(arr.value(row_idx)))
+            Ok(Value::Int(arr.value(row_idx)))
         }
         WpDataType::BigInt => {
             let arr = col
@@ -676,7 +676,7 @@ fn parse_hex_value(s: &str, field_name: &str) -> Result<Value, WpArrowError> {
 fn wp_type_to_model_meta(wp_type: &WpDataType) -> DataType {
     match wp_type {
         WpDataType::Chars => DataType::Chars,
-        WpDataType::Digit => DataType::Digit,
+        WpDataType::Digit => DataType::Int,
         WpDataType::BigInt => DataType::BigInt,
         WpDataType::Float => DataType::Float,
         WpDataType::Bool => DataType::Bool,
@@ -695,7 +695,7 @@ fn wp_type_to_model_meta(wp_type: &WpDataType) -> DataType {
                 WpDataType::Hex => "hex",
                 WpDataType::Array(_) => "array",
             };
-            DataType::Array(inner_name.to_string())
+            DataType::Array(inner_name.into())
         }
     }
 }
@@ -729,13 +729,13 @@ mod tests {
         let records = vec![
             make_record(vec![
                 Field::from_chars("name", "Alice"),
-                Field::from_digit("count", 10),
+                Field::from_int("count", 10),
                 Field::from_float("ratio", 1.5),
                 Field::from_bool("active", true),
             ]),
             make_record(vec![
                 Field::from_chars("name", "Bob"),
-                Field::from_digit("count", 20),
+                Field::from_int("count", 20),
                 Field::from_float("ratio", 2.5),
                 Field::from_bool("active", false),
             ]),
@@ -859,7 +859,7 @@ mod tests {
     fn r2b_extra_fields_ignored() {
         let fds = vec![FieldDef::new("a", WpDataType::Digit)];
         let records = vec![make_record(vec![
-            Field::from_digit("a", 1),
+            Field::from_int("a", 1),
             Field::from_chars("extra", "ignored"),
         ])];
 
@@ -877,8 +877,7 @@ mod tests {
             "tags",
             WpDataType::Array(Box::new(WpDataType::Digit)),
         )];
-        let items: Vec<DataField> =
-            vec![Field::from_digit("item", 10), Field::from_digit("item", 20)];
+        let items: Vec<DataField> = vec![Field::from_int("item", 10), Field::from_int("item", 20)];
         let records = vec![make_record(vec![Field::from_arr("tags", items)])];
 
         let batch = records_to_batch(&records, &fds).unwrap();
@@ -912,7 +911,7 @@ mod tests {
         let records: Vec<DataRecord> = (0..10000)
             .map(|i| {
                 make_record(vec![
-                    Field::from_digit("id", i),
+                    Field::from_int("id", i),
                     Field::from_chars("name", format!("row_{i}")),
                 ])
             })
@@ -943,7 +942,7 @@ mod tests {
         // Build batch from records first
         let records_in = vec![make_record(vec![
             Field::from_chars("name", "Alice"),
-            Field::from_digit("count", 42),
+            Field::from_int("count", 42),
             Field::from_float("ratio", 1.23),
             Field::from_bool("active", true),
         ])];
@@ -956,7 +955,7 @@ mod tests {
             rec.get_value("name"),
             Some(&Value::Chars(FValueStr::from("Alice")))
         );
-        assert_eq!(rec.get_value("count"), Some(&Value::Digit(42)));
+        assert_eq!(rec.get_value("count"), Some(&Value::Int(42)));
         assert_eq!(rec.get_value("ratio"), Some(&Value::Float(1.23)));
         assert_eq!(rec.get_value("active"), Some(&Value::Bool(true)));
     }
@@ -1010,9 +1009,9 @@ mod tests {
     fn b2r_sequential_ids() {
         let fds = vec![FieldDef::new("x", WpDataType::Digit)];
         let records_in = vec![
-            make_record(vec![Field::from_digit("x", 1)]),
-            make_record(vec![Field::from_digit("x", 2)]),
-            make_record(vec![Field::from_digit("x", 3)]),
+            make_record(vec![Field::from_int("x", 1)]),
+            make_record(vec![Field::from_int("x", 2)]),
+            make_record(vec![Field::from_int("x", 3)]),
         ];
         let batch = records_to_batch(&records_in, &fds).unwrap();
         let records_out = batch_to_records(&batch, &fds).unwrap();
@@ -1029,7 +1028,7 @@ mod tests {
             FieldDef::new("b", WpDataType::Digit),
         ];
         let fds_1 = vec![FieldDef::new("a", WpDataType::Digit)];
-        let records = vec![make_record(vec![Field::from_digit("a", 1)])];
+        let records = vec![make_record(vec![Field::from_int("a", 1)])];
         let batch = records_to_batch(&records, &fds_1).unwrap();
 
         let err = batch_to_records(&batch, &fds_2).unwrap_err();
@@ -1064,15 +1063,13 @@ mod tests {
             FieldDef::new("nums", WpDataType::Array(Box::new(WpDataType::Digit))),
         ];
 
-        let arr_items: Vec<DataField> = vec![
-            Field::from_digit("item", 100),
-            Field::from_digit("item", 200),
-        ];
+        let arr_items: Vec<DataField> =
+            vec![Field::from_int("item", 100), Field::from_int("item", 200)];
 
         let records_in = vec![
             make_record(vec![
                 Field::from_chars("chars", "hello"),
-                Field::from_digit("digit", 42),
+                Field::from_int("digit", 42),
                 Field::from_float("float", 9.876),
                 Field::from_bool("bool", true),
                 Field::from_time("time", ndt),
@@ -1082,13 +1079,13 @@ mod tests {
             ]),
             make_record(vec![
                 Field::from_chars("chars", "world"),
-                Field::from_digit("digit", -1),
+                Field::from_int("digit", -1),
                 Field::from_float("float", 0.0),
                 Field::from_bool("bool", false),
                 Field::from_time("time", ndt),
                 Field::new(DataType::IP, "ip", Value::IpNet(net.clone())),
                 Field::from_hex("hex", HexT(0)),
-                Field::from_arr("nums", vec![Field::from_digit("item", 300)]),
+                Field::from_arr("nums", vec![Field::from_int("item", 300)]),
             ]),
         ];
 
@@ -1102,7 +1099,7 @@ mod tests {
             records_out[0].get_value("chars"),
             Some(&Value::Chars(FValueStr::from("hello")))
         );
-        assert_eq!(records_out[0].get_value("digit"), Some(&Value::Digit(42)));
+        assert_eq!(records_out[0].get_value("digit"), Some(&Value::Int(42)));
         assert_eq!(
             records_out[0].get_value("float"),
             Some(&Value::Float(9.876))
@@ -1118,8 +1115,8 @@ mod tests {
         // Verify array field
         if let Some(Value::Array(items)) = records_out[0].get_value("nums") {
             assert_eq!(items.len(), 2);
-            assert_eq!(items[0].get_value(), &Value::Digit(100));
-            assert_eq!(items[1].get_value(), &Value::Digit(200));
+            assert_eq!(items[0].get_value(), &Value::Int(100));
+            assert_eq!(items[1].get_value(), &Value::Int(200));
         } else {
             panic!("expected Array value for 'nums'");
         }
@@ -1139,7 +1136,7 @@ mod tests {
         let records_in = vec![
             make_record(vec![
                 Field::from_chars("name", "row1"),
-                Field::from_digit("opt_digit", 100),
+                Field::from_int("opt_digit", 100),
             ]),
             make_record(vec![
                 Field::from_chars("name", "row2"),
@@ -1153,7 +1150,7 @@ mod tests {
         assert_eq!(records_out.len(), 2);
         assert_eq!(
             records_out[0].get_value("opt_digit"),
-            Some(&Value::Digit(100))
+            Some(&Value::Int(100))
         );
         // null field should be absent from the record (we skip nulls in batch_to_records)
         assert_eq!(records_out[1].get_value("opt_digit"), None);
