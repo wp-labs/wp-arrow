@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-09-19
+
+### Added
+
+#### 线协议契约表：`contract::wp_type_to_arrow`（A-2 第 1 步）
+
+- 新增 `contract` 模块：`wp_model_core::model::DataType`（穷尽 **37 变体**，无 `_` 兜底）
+  → Arrow 列类型。它是 **wparse（sink）↔ wfusion（接收）Arrow 列类型契约**的实现，
+  口径表见 `wp-reactor/docs/design/arrow-type-mapping.md` §3。
+- 该入口不依赖任何 connector crate，也不依赖本 crate 的 `WpDataType`——入参就是
+  `wp_model_core::model::DataType`。
+- 测试：全 37 变体钉桩（`wire_contract_full_mapping_is_pinned`）、
+  `hex` 必须为 `Utf8` 的 DIV-1 回归（`hex_must_be_utf8`）、
+  以及「契约 ≠ 9 变体类型化前端」的防呆两条
+  （`wire_contract_differs_from_the_typed_frontend_on_two_rows`、`wire_contract_and_frontend_agree_on_the_overlap`）。
+
+### Changed
+
+- 文档定位澄清（不涉及行为）：本 crate 是 wp-model ↔ Arrow **契约**的归属地；
+  `schema` / `convert`（9 变体的 `WpDataType`）是**类型化前端**，其 `Array` → `List(inner)`、
+  `BigInt` → `Decimal256(39,0)` 与线协议无关——契约口径是保守的（结构化与大整数一律 `Utf8`）。
+  这是对 `wp-labs/warp-fusion#102` 那类「按自我声明找权威实现」误判的防呆。
+- 版本 0.4.0 → 0.4.1（纯新增，不改现有行为；`^0.4` 的下游无需改版本要求）。
+
+### Tests
+
+- 69 → 73 项测试全部通过（新增 4 项 `contract` 测试）。
+
 ## [0.4.0] - 2026-09-19
 
 ### ⚠️ BREAKING CHANGES
@@ -65,6 +93,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - 版本 0.2.0 → 0.3.0
 
-[Unreleased]: https://github.com/wp-labs/wp-arrow/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/wp-labs/wp-arrow/compare/v0.4.1...HEAD
+[0.4.1]: https://github.com/wp-labs/wp-arrow/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/wp-labs/wp-arrow/compare/v0.3.1...v0.4.0
 [0.3.0]: https://github.com/wp-labs/wp-arrow/compare/v0.2.0...v0.3.0

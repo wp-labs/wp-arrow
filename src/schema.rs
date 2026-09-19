@@ -1,3 +1,16 @@
+//! `WpDataType`（本 crate 的 9 变体枚举）→ Arrow 类型映射。
+//!
+//! **这是「类型化前端」，不是线协议契约的入口。** 契约（wparse sink ↔ wfusion 接收）见
+//! [`crate::contract::wp_type_to_arrow`]：它穷尽 `wp_model_core::model::DataType` 的 37 个变体，
+//! 而本模块的 [`WpDataType`] 是 9 变体的强类型前端，它自己的 `Array` → `List(inner)`、
+//! `BigInt` → `Decimal256` **与线协议无关**（契约口径是保守的：结构化与大整数一律 `Utf8`）。
+//!
+//! ⚠️ 所以不要用本模块的口径判断契约是否一致。详见 crate 级文档与
+//! `wp-reactor/docs/design/arrow-type-mapping.md`（§1 A-0 / A-2）。
+//!
+//! 注意 [`WpDataType::Digit`] 的名字**刻意保留**：家族那轮 `Digit → Int` 正名没触及它，
+//! 因为改名会同时改字段元数据字符串与行为。
+
 use std::sync::Arc;
 
 use arrow::datatypes::{DataType as ArrowDataType, Field as ArrowField, Schema, TimeUnit};

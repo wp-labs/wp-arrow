@@ -1,3 +1,14 @@
+//! `wp_model_core` 的记录 ↔ Arrow 列的值侧转换（`records_to_batch` / `batch_to_records`）。
+//!
+//! ⚠️ **当前不在生产路径上（全家族 0 调用）**，与 `wp-connector-utils` 的
+//! `arrow/record.rs` 职责重复（后者是生产在用的一份）。
+//!
+//! 按规格表 A-2，本模块与 `arrow/record.rs` 要**合并成一份**，作为契约值侧的唯一实现 ——
+//! 合并时错误类型要解耦（本 crate 不能依赖 `wp-connector-api` 的 `SinkResult` /
+//! `SinkReason`，改走 [`crate::error::WpArrowError`] 或泛型化）。
+//!
+//! ⚠️ 在此之前，**不要拿本模块的转换结果去对拍线协议**（理由见 crate 级文档）。
+
 use std::net::IpAddr;
 use std::str::FromStr;
 use std::sync::Arc;
