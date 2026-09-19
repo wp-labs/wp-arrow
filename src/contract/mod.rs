@@ -1,7 +1,12 @@
-//! 线协议契约：`wp_model_core::model::DataType` → Arrow 列类型。
+//! 线协议契约：`wp_model_core::model::DataType` → Arrow 列类型，以及值层（`DataRecord` → 列）。
 //!
 //! 这是 **wparse（sink 侧）↔ wfusion（接收侧）Arrow 列类型契约**的实现，
 //! 规格表见 `wp-reactor/docs/design/arrow-type-mapping.md`（§3 是逐行口径表，§4 是已知差异登记）。
+//!
+//! 两层：
+//! - [`wp_type_to_arrow`]（本模块）—— 表：某类型该是什么 Arrow 列；
+//! - [`value`] —— 值：值怎么写进那一列（[`encode_record`] / [`encode_records`]）。
+//! - 两层都按 **Arrow 列类型**说事，所以口径只有一处：先查表得到列类型，值层只认列类型。
 //!
 //! # 归属（A-2）
 //!
@@ -11,9 +16,9 @@
 //! `wp-arrow`（`schema.rs`/`convert.rs` 的 9 变体类型化前端），拿到的是另一套口径，
 //! 于2026-09-19 报出「`wp-arrow` 与 `wp-connector-utils` 不一致」（wp-labs/warp-fusion#102）。
 //!
-//! **迁移状态**：本模块已落地（A-2 第 1 步）；第 2 步是让 `wp-connector-utils`
-//! 改为转发到本模块、并把契约的**值层**（`DataRecord` → 列）一并搬来 —— 那一步
-//! 需要先发布本 crate（跨仓发布顺序见规格表 §5）。
+//! **迁移状态**：本模块已落地（A-2 2a），值层已随 2c 迁入（[`value`]）；
+//! `wp-connector-utils` 的 `arrow::wp_type_to_arrow` / `arrow::record` 已改为转发到这里，
+//! 并经 `wp-arrow` 发布版进入生产（跨仓发布顺序见规格表 §5）。
 //!
 //! # 不要把本表与 [`crate::schema`] 混为一谈
 //!
@@ -23,6 +28,10 @@
 //! 任意精度整数一律十进制 `Utf8`。
 
 use arrow::datatypes::{DataType, TimeUnit};
+
+pub mod value;
+
+pub use value::{encode_record, encode_records};
 
 /// `wp_model_core::model::DataType` → Arrow 列类型（**线协议契约口径**）。
 ///

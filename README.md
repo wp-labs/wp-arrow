@@ -16,16 +16,16 @@ The contract's single source of truth is the spec table in
 [`wp-reactor/docs/design/arrow-type-mapping.md`](https://github.com/wp-labs/wp-reactor/blob/main/docs/design/arrow-type-mapping.md);
 this crate is where its implementation is meant to live.
 
-**Current state (2026-09):** the contract's schema table now **also** lives here as
-[`contract::wp_type_to_arrow`](https://docs.rs/wp-arrow/latest/wp_arrow/contract/fn.wp_type_to_arrow.html)
-(exhaustive over the 37 variants of `wp_model_core::model::DataType`, with its own pinning test) —
-that is migration step A-2/2a, a **pure addition**.
+**Current state (2026-09 — migration A-2 steps 2a/2b/2c done):** both layers of the contract live in
+[`contract`](https://docs.rs/wp-arrow/latest/wp_arrow/contract/index.html):
 
-**Not switched over yet:** `wp-connector-utils` still holds its own copy of that table, and the
-receiver side (`wf-runtime`) derives its expectations from it. Step A-2/2b is to make
-`wp-connector-utils` delegate here and drop its copy; that step is **gated on publishing a new
-version of this crate** (a published crate may only depend on crates.io versions). Until then,
-the *effective* implementation stays in `wp-connector-utils`.
+- the **column-type table** (`contract::wp_type_to_arrow`, exhaustive over the 37 variants of
+  `wp_model_core::model::DataType`, with its own pinning test);
+- the **value layer** (`contract::value::encode_record(s)`, `DataRecord` → columns).
+
+**On the production path:** `wp-connector-utils` now *forwards* both to this crate
+(`arrow::wp_type_to_arrow` and `arrow::record::data_records_to_batch`, same public paths and
+signatures), reaching production through `wf-runtime`.
 
 > ⚠️ **Do not use `schema` / `convert` (the 9-variant typed front-end) to judge wire-contract
 > consistency** — the contract is `contract`. `WpDataType`'s `Array` → `List(inner)` and
@@ -34,13 +34,13 @@ the *effective* implementation stays in `wp-connector-utils`.
 > `wp-labs/warp-fusion#102` was exactly the opposite misjudgement: "find the authoritative
 > implementation from the self-description → land on the typed front-end → report an inconsistency".
 
-The full migration plan is the A-2 section of the spec table.
+The full migration record is the A-2 section of the spec table.
 
 ## Modules
 
-- **contract** - Wire-contract mapping: `wp_model_core::model::DataType` (37 variants, exhaustive) → Arrow column type. **This is `wparse` ↔ `wfusion`'s Arrow contract.**
+- **contract** - The `wparse` ↔ `wfusion` Arrow contract: `wp_model_core::model::DataType` (37 variants, exhaustive) → Arrow column type, **and** the value layer (`DataRecord` → columns).
 - **schema** - Arrow schema definitions and mapping from wp-model types (9-variant `WpDataType` **typed front-end**, not the contract)
-- **convert** - Data conversion between wp-model and Arrow arrays (currently unused; to be merged with `wp-connector-utils`' value layer in A-2/2c)
+- **convert** - Typed `DataRecord` ↔ Arrow conversion built on that front-end (currently unused; not the contract)
 - **ipc** - Arrow IPC serialization and deserialization (`[4B tag_len BE][tag][Arrow IPC stream]` frame = the de-facto wire format used by the family's live producer/consumer, which currently implement it independently)
 - **error** - Error types
 

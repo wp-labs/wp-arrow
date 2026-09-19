@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.2] - 2026-09-19
+
+### Added
+
+- **契约的值层迁入 `contract::value`（A-2 第 3 步 / 2c）**：`DataRecord` → 列 的编码
+  （`encode_record` / `encode_records`）从 `wp-connector-utils/src/arrow/record.rs`
+  **逐字移植**（只把错误类型从 `SinkResult`/`SinkReason` 换成 `WpArrowError`；派发仍
+  **按 Arrow 列类型**，所以口径仍由 `contract::wp_type_to_arrow` 单点决定）。
+  至此线协议契约的两层 —— 列类型表 + 值编码 —— 都在本 crate。
+- 新增依赖 `serde_json`：结构化字段（`Obj`/`Array`）按 JSON 文本写入 Utf8 列，
+  与移植前口径一致。
+- 等价性凭据：同一份「金标准」夹具与期望在**迁移前**（`wp-connector-utils` 的实现）
+  与**迁移后**（`contract::value`）两处各有一份且同时通过
+  （`wire_value_encoding_is_pinned_by_golden_values`）→ 搬迁是等价改动，
+  而不只是「看起来一样」。
+
+### Changed
+
+- `contract` 拆为 `contract/mod.rs`（列类型表）+ `contract/value.rs`（值层），两者均公开；
+  `contract::{encode_record, encode_records}` 是值层的稳定入口。
+
+### Tests
+
+- 73 → 76 项测试。
+
 ## [0.4.1] - 2026-09-19
 
 ### Added
@@ -93,7 +118,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - 版本 0.2.0 → 0.3.0
 
-[Unreleased]: https://github.com/wp-labs/wp-arrow/compare/v0.4.1...HEAD
+[Unreleased]: https://github.com/wp-labs/wp-arrow/compare/v0.4.2...HEAD
+[0.4.2]: https://github.com/wp-labs/wp-arrow/compare/v0.4.1...v0.4.2
 [0.4.1]: https://github.com/wp-labs/wp-arrow/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/wp-labs/wp-arrow/compare/v0.3.1...v0.4.0
 [0.3.0]: https://github.com/wp-labs/wp-arrow/compare/v0.2.0...v0.3.0
